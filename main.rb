@@ -53,10 +53,12 @@ module ScrapModels
     parse_script = JSON.parse(decoded_script)
     
     data = parse_script["context"]["dispatcher"]["stores"]["RunwayLandingStore"]["data"]
+    # Pry.start(binding)
     
     fashionshowname = data['season']['name']
-    year = Chronic::parse(data['eventDate']).year
-    month = Chronic::parse(data['eventDate']).month
+    parsed_time = Chronic::parse(data['eventDate'])
+    year = parsed_time.year if not parsed_time.nil?
+    month = parsed_time.month if not parsed_time.nil?
     city = data['city']['name']
     brandname = data['brand']['name']
     
@@ -157,10 +159,15 @@ module Main
   seasons_url.each do |season_url|
     shows_url = ScrapShows::run("#{Constants::base_url}/#{season_url}")
     shows_url.each do |show_url|
+      filename = "./data/#{season_url}_#{show_url}.csv"
+      next if File.exist? filename
+      
       result = ScrapModels::run("#{Constants::base_url}/#{season_url}/#{show_url}")
-        # result = ScrapModels::run('http://www.vogue.com/fashion-shows/tokyo-fall-2016/tokyo-new-age')
+      # result = ScrapModels::run('http://www.vogue.com/fashion-shows/fall-2016-ready-to-wear/simon-miller')
 
-      f = File.new("#{season_url}_#{show_url}.csv", 'w')
+      next if result.empty?
+      
+      f = File.new(filename, 'w')
       f.write("fashionshowname,year,month,city,brandname,order,modelname,modelagency\n")
       result.each do |entry|
         puts entry.to_string
