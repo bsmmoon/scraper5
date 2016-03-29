@@ -71,7 +71,7 @@ module Main
     if models.empty?
       modelname_and_agency = slide['slideDetails']['caption']
       modelname = modelname_and_agency.split(' (')[0]
-      modelagency = modelname_and_agency[/\(.*?\)/]
+      modelagency = modelname_and_agency.match(/(\((.*)\))/)[2]
     else
       models.each do |model|
         break if model['agencies'].nil?
