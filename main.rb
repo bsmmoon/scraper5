@@ -9,6 +9,10 @@ module Constants
   module_function
   def attrs; [:fashionshowname, :year, :month, :city, :brandname, :order, :modelname, :modelagency]; end
   def base_url; 'http://www.vogue.com/fashion-shows'; end
+  def flag=(flag); @flag=flag; end
+  def flag; @flag; end
+  def last_address=(last_address); @last_address=last_address; end
+  def last_address; @last_address; end
   
   def self.included(base)
     puts 'extended'
@@ -43,7 +47,10 @@ module ScrapModels
   include Constants
   
   def run(address)
-    puts address
+    puts "#{address}"
+    return [] if (Constants::flag and (not Constants::last_address.eql? address))
+    Constants::flag = false
+
     result = []
     
     page = HTTParty.get(address)
@@ -54,6 +61,8 @@ module ScrapModels
     
     data = parse_script["context"]["dispatcher"]["stores"]["RunwayLandingStore"]["data"]
     # Pry.start(binding)
+    
+    return [] if data['slideShows'].nil? || data['slideShows'].empty?
     
     fashionshowname = data['season']['name']
     parsed_time = Chronic::parse(data['eventDate'])
@@ -155,6 +164,9 @@ module Main
   include ScrapShows
   include ScrapModels
   
+  Constants::flag = true
+  Constants::last_address = 'http://www.vogue.com/fashion-shows/resort-2015/mulberry'
+  
   seasons_url = ScrapSeasons.run("#{Constants::base_url}")
   seasons_url.each do |season_url|
     shows_url = ScrapShows::run("#{Constants::base_url}/#{season_url}")
@@ -163,7 +175,7 @@ module Main
       next if File.exist? filename
       
       result = ScrapModels::run("#{Constants::base_url}/#{season_url}/#{show_url}")
-      # result = ScrapModels::run('http://www.vogue.com/fashion-shows/fall-2016-ready-to-wear/simon-miller')
+      # result = ScrapModels::run('http://www.vogue.com/fashion-shows/pre-fall-2015/gucci')
 
       next if result.empty?
       
@@ -176,7 +188,7 @@ module Main
       end
       f.close
       
-      sleep(rand(5))
+      sleep(rand(5..10))
     end
   end
   
