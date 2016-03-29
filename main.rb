@@ -55,7 +55,7 @@ module Main
   f = File.new('raw.rb', 'w')
   f.write(parse_script)
   f.close
-  Pry.start(binding)
+  # Pry.start(binding)
   
   fashionshowname = data['season']['name']
   year = Chronic::parse(data['eventDate']).year
@@ -72,34 +72,30 @@ module Main
       modelname_and_agency = slide['slideDetails']['caption']
       modelname = modelname_and_agency.split(' (')[0]
       modelagency = modelname_and_agency[/\(.*?\)/]
-      next
+    else
+      models.each do |model|
+        break if model['agencies'].nil?
+        
+        modelname = model['name']
+        modelagency = ''
+  
+        agencies = model['agencies']
+        agencies.each do |agency|
+          next unless agency['city']['name'].eql? city
+          modelagency = agency['name']
+          break
+        end
+      end
     end
     
-    index = 0
-    models.each do |model|
-      # index += 1
-      # next if index < order
-      puts "#{order} #{index}"
-      next if index != order - 1
-      break if model['agencies'].nil?
-      
-      modelname = model['name']
-      modelagency = ''
-
-      agencies = model['agencies']
-      agencies.each do |agency|
-        next unless agency['city']['name'].eql? city
-        modelagency = agency['name']
-        break
-      end
-      
-      entry = DataEntry.new
-      Attributes::attrs.each do |attr|
-        next if not local_variables.include? attr
-        entry.send("#{attr}=".to_sym, eval(attr.to_s))
-      end
-      result.push(entry)
+    next if modelname.nil? || modelname.empty?
+    
+    entry = DataEntry.new
+    Attributes::attrs.each do |attr|
+      next if not local_variables.include? attr
+      entry.send("#{attr}=".to_sym, eval(attr.to_s))
     end
+    result.push(entry)
   end
   
   f = File.new('data.csv', 'w')
