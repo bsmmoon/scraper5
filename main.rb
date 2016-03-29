@@ -37,7 +37,7 @@ class DataEntry
   end
 end
 
-module ScrapShow
+module ScrapModels
   module_function
   include Attributes
   
@@ -109,14 +109,34 @@ module ScrapShow
   end
 end
 
-module ScrapSeason
+module ScrapSeasons
+  module_function
   
+  def run
+    base_address = 'http://www.vogue.com/fashion-shows'
+    page = HTTParty.get(base_address)
+    parse_page = Nokogiri::HTML(page)
+    script = parse_page.css('#initial-state').text
+    decoded_script = URI.unescape(script)
+    parse_script = JSON.parse(decoded_script)
+    
+    seasons = parse_script['context']['dispatcher']['stores']['RunwayLandingStore']['data']['content']
+    seasons_url = []
+    seasons.each do |season|
+      seasons_url.push(season['urlFragment'])
+    end
+    
+    seasons_url
+  end
 end
 
 module Main
-  include ScrapShow
+  include ScrapSeasons
+  include ScrapModels
+  
+  seasons_url = ScrapSeasons.run
   
   # address = 'http://www.vogue.com/fashion-shows/spring-2015-couture/alexis-mabille'
   # Pry.start(binding)
-  # ScrapShow::run(address)
+  # ScrapModels::run(address)
 end
