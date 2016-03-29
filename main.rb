@@ -5,9 +5,10 @@ require 'json'
 require 'uri'
 require 'chronic'
 
-module Attributes
+module Constants
   module_function
   def attrs; [:fashionshowname, :year, :month, :city, :brandname, :order, :modelname, :modelagency]; end
+  def base_url; 'http://www.vogue.com/fashion-shows'; end
   
   def self.included(base)
     puts 'extended'
@@ -15,16 +16,16 @@ module Attributes
 end
 
 class DataEntry
-  include Attributes
+  include Constants
   
-  Attributes::attrs.each do |attr|
+  Constants::attrs.each do |attr|
     attr_accessor attr
   end
   
   define_method :to_string do
     first_col = true
     str = ''
-    Attributes::attrs.each do |attr|
+    Constants::attrs.each do |attr|
       if not first_col
         str = "#{str}, "
       else
@@ -39,13 +40,12 @@ end
 
 module ScrapModels
   module_function
-  include Attributes
+  include Constants
   
   def run(address)
+    puts address
     result = []
     
-    # address = 'http://www.vogue.com/fashion-shows/spring-2015-couture/alexandre-vauthier'
-    # address = 'http://www.vogue.com/fashion-shows/spring-2015-couture/alexis-mabille'
     page = HTTParty.get(address)
     parse_page = Nokogiri::HTML(page)
     script = parse_page.css('#initial-state').text
@@ -53,10 +53,6 @@ module ScrapModels
     parse_script = JSON.parse(decoded_script)
     
     data = parse_script["context"]["dispatcher"]["stores"]["RunwayLandingStore"]["data"]
-    
-    f = File.new('raw.rb', 'w')
-    f.write(parse_script)
-    f.close
     
     fashionshowname = data['season']['name']
     year = Chronic::parse(data['eventDate']).year
@@ -71,8 +67,14 @@ module ScrapModels
       
       if models.empty?
         modelname_and_agency = slide['slideDetails']['caption']
-        modelname = modelname_and_agency.split(' (')[0]
-        modelagency = modelname_and_agency.match(/(\((.*)\))/)[2]
+        if modelname_and_agency.nil? or modelname_and_agency.empty?
+          # nil guard
+        else
+          modelname = modelname_and_agency.split(' (')[0]
+          if modelname_and_agency.include? '('
+            modelagency = modelname_and_agency.match(/(\((.*)\))/)[2]
+          end
+        end
       else
         models.each do |model|
           break if model['agencies'].nil?
@@ -92,29 +94,23 @@ module ScrapModels
       next if modelname.nil? || modelname.empty?
       
       entry = DataEntry.new
-      Attributes::attrs.each do |attr|
+      Constants::attrs.each do |attr|
         next if not local_variables.include? attr
         entry.send("#{attr}=".to_sym, eval(attr.to_s))
       end
       result.push(entry)
     end
     
-    f = File.new('data.csv', 'w')
-    result.each do |entry|
-      puts entry.to_string
-      f.write(entry.to_string)
-      f.write("\n")
-    end
-    f.close
+    result
   end
 end
 
 module ScrapSeasons
   module_function
-  
-  def run
-    base_address = 'http://www.vogue.com/fashion-shows'
-    page = HTTParty.get(base_address)
+  include Constants
+
+  def run(address)
+    page = HTTParty.get(address)
     parse_page = Nokogiri::HTML(page)
     script = parse_page.css('#initial-state').text
     decoded_script = URI.unescape(script)
@@ -130,13 +126,52 @@ module ScrapSeasons
   end
 end
 
+module ScrapShows
+  module_function
+  include Constants
+  
+  def run(address)
+    page = HTTParty.get(address)
+    parse_page = Nokogiri::HTML(page)
+    script = parse_page.css('#initial-state').text
+    decoded_script = URI.unescape(script)
+    parse_script = JSON.parse(decoded_script)
+    
+    shows = parse_script['context']['dispatcher']['stores']['RunwayLandingStore']['data']['fashionShows']
+    shows_url = []
+    shows.each do |show|
+      shows_url.push(show['brandUrlFragment'])
+    end
+    
+    shows_url
+  end
+end
+
 module Main
+  include Constants
   include ScrapSeasons
+  include ScrapShows
   include ScrapModels
   
-  seasons_url = ScrapSeasons.run
+  seasons_url = ScrapSeasons.run("#{Constants::base_url}")
+  seasons_url.each do |season_url|
+    shows_url = ScrapShows::run("#{Constants::base_url}/#{season_url}")
+    shows_url.each do |show_url|
+      result = ScrapModels::run("#{Constants::base_url}/#{season_url}/#{show_url}")
+        # result = ScrapModels::run('http://www.vogue.com/fashion-shows/tokyo-fall-2016/tokyo-new-age')
+
+      f = File.new("#{season_url}_#{show_url}.csv", 'w')
+      f.write("fashionshowname,year,month,city,brandname,order,modelname,modelagency\n")
+      result.each do |entry|
+        puts entry.to_string
+        f.write(entry.to_string)
+        f.write("\n")
+      end
+      f.close
+      
+      sleep(rand(5))
+    end
+  end
   
-  # address = 'http://www.vogue.com/fashion-shows/spring-2015-couture/alexis-mabille'
   # Pry.start(binding)
-  # ScrapModels::run(address)
 end
