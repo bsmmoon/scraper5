@@ -37,72 +37,86 @@ class DataEntry
   end
 end
 
-module Main
+module ScrapShow
+  module_function
   include Attributes
   
-  result = []
-  
-  # address = 'http://www.vogue.com/fashion-shows/spring-2015-couture/alexandre-vauthier'
-  address = 'http://www.vogue.com/fashion-shows/spring-2015-couture/alexis-mabille'
-  page = HTTParty.get(address)
-  parse_page = Nokogiri::HTML(page)
-  script = parse_page.css('#initial-state').text
-  decoded_script = URI.unescape(script)
-  parse_script = JSON.parse(decoded_script)
-  
-  data = parse_script["context"]["dispatcher"]["stores"]["RunwayLandingStore"]["data"]
-  
-  f = File.new('raw.rb', 'w')
-  f.write(parse_script)
-  f.close
-  # Pry.start(binding)
-  
-  fashionshowname = data['season']['name']
-  year = Chronic::parse(data['eventDate']).year
-  month = Chronic::parse(data['eventDate']).month
-  city = data['city']['name']
-  brandname = data['brand']['name']
-  
-  order = 0
-  data['slideShows']['collection']['slides'].each do |slide|
-    models = slide['taggedPeople']
-    order += 1
+  def run(address)
+    result = []
     
-    if models.empty?
-      modelname_and_agency = slide['slideDetails']['caption']
-      modelname = modelname_and_agency.split(' (')[0]
-      modelagency = modelname_and_agency.match(/(\((.*)\))/)[2]
-    else
-      models.each do |model|
-        break if model['agencies'].nil?
-        
-        modelname = model['name']
-        modelagency = ''
-  
-        agencies = model['agencies']
-        agencies.each do |agency|
-          next unless agency['city']['name'].eql? city
-          modelagency = agency['name']
-          break
+    # address = 'http://www.vogue.com/fashion-shows/spring-2015-couture/alexandre-vauthier'
+    # address = 'http://www.vogue.com/fashion-shows/spring-2015-couture/alexis-mabille'
+    page = HTTParty.get(address)
+    parse_page = Nokogiri::HTML(page)
+    script = parse_page.css('#initial-state').text
+    decoded_script = URI.unescape(script)
+    parse_script = JSON.parse(decoded_script)
+    
+    data = parse_script["context"]["dispatcher"]["stores"]["RunwayLandingStore"]["data"]
+    
+    f = File.new('raw.rb', 'w')
+    f.write(parse_script)
+    f.close
+    
+    fashionshowname = data['season']['name']
+    year = Chronic::parse(data['eventDate']).year
+    month = Chronic::parse(data['eventDate']).month
+    city = data['city']['name']
+    brandname = data['brand']['name']
+    
+    order = 0
+    data['slideShows']['collection']['slides'].each do |slide|
+      models = slide['taggedPeople']
+      order += 1
+      
+      if models.empty?
+        modelname_and_agency = slide['slideDetails']['caption']
+        modelname = modelname_and_agency.split(' (')[0]
+        modelagency = modelname_and_agency.match(/(\((.*)\))/)[2]
+      else
+        models.each do |model|
+          break if model['agencies'].nil?
+          
+          modelname = model['name']
+          modelagency = ''
+    
+          agencies = model['agencies']
+          agencies.each do |agency|
+            next unless agency['city']['name'].eql? city
+            modelagency = agency['name']
+            break
+          end
         end
       end
+      
+      next if modelname.nil? || modelname.empty?
+      
+      entry = DataEntry.new
+      Attributes::attrs.each do |attr|
+        next if not local_variables.include? attr
+        entry.send("#{attr}=".to_sym, eval(attr.to_s))
+      end
+      result.push(entry)
     end
     
-    next if modelname.nil? || modelname.empty?
-    
-    entry = DataEntry.new
-    Attributes::attrs.each do |attr|
-      next if not local_variables.include? attr
-      entry.send("#{attr}=".to_sym, eval(attr.to_s))
+    f = File.new('data.csv', 'w')
+    result.each do |entry|
+      puts entry.to_string
+      f.write(entry.to_string)
+      f.write("\n")
     end
-    result.push(entry)
+    f.close
   end
+end
+
+module ScrapSeason
   
-  f = File.new('data.csv', 'w')
-  result.each do |entry|
-    puts entry.to_string
-    f.write(entry.to_string)
-    f.write("\n")
-  end
-  f.close
+end
+
+module Main
+  include ScrapShow
+  
+  # address = 'http://www.vogue.com/fashion-shows/spring-2015-couture/alexis-mabille'
+  # Pry.start(binding)
+  # ScrapShow::run(address)
 end
