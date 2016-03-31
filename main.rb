@@ -165,7 +165,7 @@ module Main
   include ScrapModels
   
   Constants::flag = true
-  Constants::last_address = 'http://www.vogue.com/fashion-shows/resort-2015/mulberry'
+  Constants::last_address = 'http://www.vogue.com/fashion-shows/fall-2014-ready-to-wear/leonard'
   
   seasons_url = ScrapSeasons.run("#{Constants::base_url}")
   seasons_url.each do |season_url|
@@ -175,7 +175,7 @@ module Main
       next if File.exist? filename
       
       result = ScrapModels::run("#{Constants::base_url}/#{season_url}/#{show_url}")
-      # result = ScrapModels::run('http://www.vogue.com/fashion-shows/pre-fall-2015/gucci')
+      # result = ScrapModels::run('http://www.vogue.com/fashion-shows/fall-2014-ready-to-wear/valentin-yudashkin') # sample with only one entry
 
       next if result.empty?
       
@@ -190,6 +190,7 @@ module Main
       
       sleep(rand(5..10))
     end
+    sleep(rand(2..4))
   end
   
   # Pry.start(binding)
