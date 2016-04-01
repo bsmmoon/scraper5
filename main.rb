@@ -46,9 +46,9 @@ module ScrapModels
   module_function
   include Constants
   
-  def run(address)
+  def run(address, debug=false)
     puts "#{address}"
-    return [] if (Constants::flag and (not Constants::last_address.eql? address))
+    return [] if not debug and (Constants::flag and (not Constants::last_address.eql? address))
     Constants::flag = false
 
     result = []
@@ -60,12 +60,13 @@ module ScrapModels
     parse_script = JSON.parse(decoded_script)
     
     data = parse_script["context"]["dispatcher"]["stores"]["RunwayLandingStore"]["data"]
-    # Pry.start(binding)
+    Pry.start(binding) if debug
     
     return [] if data['slideShows'].nil? || data['slideShows'].empty?
     
     fashionshowname = data['season']['name']
     parsed_time = Chronic::parse(data['eventDate'])
+    parsed_time = Chronic::parse(data['showPubDate']) if parsed_time.nil?
     year = parsed_time.year if not parsed_time.nil?
     month = parsed_time.month if not parsed_time.nil?
     city = data['city']['name']
@@ -165,17 +166,24 @@ module Main
   include ScrapModels
   
   Constants::flag = true
-  Constants::last_address = 'http://www.vogue.com/fashion-shows/fall-2014-ready-to-wear/leonard'
+  Constants::last_address = 'http://www.vogue.com/fashion-shows/spring-2014-menswear/j-w-anderson'
+  season_flag = false
+  last_season_url = 'spring-2014-menswear'
+  
+  debug = false
   
   seasons_url = ScrapSeasons.run("#{Constants::base_url}")
   seasons_url.each do |season_url|
+    next unless not debug and (season_flag or season_url.eql? last_season_url)
+    season_flag = true
+    
     shows_url = ScrapShows::run("#{Constants::base_url}/#{season_url}")
     shows_url.each do |show_url|
       filename = "./data/#{season_url}_#{show_url}.csv"
-      next if File.exist? filename
+      next if not debug and File.exist? filename
       
       result = ScrapModels::run("#{Constants::base_url}/#{season_url}/#{show_url}")
-      # result = ScrapModels::run('http://www.vogue.com/fashion-shows/fall-2014-ready-to-wear/valentin-yudashkin') # sample with only one entry
+      result = ScrapModels::run('http://www.vogue.com/fashion-shows/resort-2015/anna-sui', debug) if debug
 
       next if result.empty?
       
